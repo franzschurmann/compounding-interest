@@ -1,0 +1,344 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f1117;
+  color: #e1e4e8;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #8b949e;
+  margin-bottom: 2rem;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.input-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.input-group input {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e1e4e8;
+  font-size: 1.1rem;
+  padding: 0.55rem 0.75rem;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: #6e7681;
+}
+
+/* Re-roll button */
+.btn-group {
+  justify-content: flex-end;
+}
+
+.btn-reroll {
+  background: #238636;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.55rem 1.25rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: auto;
+}
+
+.btn-reroll:hover {
+  background: #2ea043;
+}
+
+/* Starting investment toggle row */
+.starting-investment-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #8b949e;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: #58a6ff;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.starting-amount-wrapper {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.starting-amount-wrapper.visible {
+  display: flex;
+}
+
+.starting-amount-wrapper input {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #e1e4e8;
+  font-size: 1.1rem;
+  padding: 0.55rem 0.75rem;
+  width: 140px;
+  transition: border-color 0.15s;
+}
+
+.starting-amount-wrapper input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.chart-container {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.chart-container canvas {
+  display: block;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 1.25rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.stat-value.simulated {
+  color: #58a6ff;
+}
+
+.stat-value.gain {
+  color: #3fb950;
+}
+
+.stat-pct {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.stat-pct.gain {
+  color: #3fb950;
+}
+
+.stat-value.loss,
+.stat-pct.loss {
+  color: #f85149;
+}
+
+/* Table section */
+.table-section {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.table-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.toggle-group {
+  display: flex;
+  gap: 0;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  background: transparent;
+  color: #8b949e;
+  border: none;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-btn:not(:last-child) {
+  border-right: 1px solid #30363d;
+}
+
+.toggle-btn.active {
+  background: #30363d;
+  color: #e1e4e8;
+}
+
+.toggle-btn:hover:not(.active) {
+  background: rgba(48, 54, 61, 0.5);
+}
+
+.table-wrapper {
+  max-height: 450px;
+  overflow-y: auto;
+  border-radius: 6px;
+}
+
+.table-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+  background: #161b22;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+
+#portfolioTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+#portfolioTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+#portfolioTable th {
+  background: #21262d;
+  color: #8b949e;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.65rem 0.75rem;
+  text-align: right;
+  border-bottom: 1px solid #30363d;
+}
+
+#portfolioTable th:first-child {
+  text-align: left;
+}
+
+#portfolioTable td {
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  text-align: right;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+}
+
+#portfolioTable td:first-child {
+  text-align: left;
+  color: #8b949e;
+}
+
+#portfolioTable tbody tr:hover {
+  background: rgba(48, 54, 61, 0.3);
+}
+
+#portfolioTable td.positive {
+  color: #3fb950;
+}
+
+#portfolioTable td.negative {
+  color: #f85149;
+}
+
+@media (max-width: 500px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}

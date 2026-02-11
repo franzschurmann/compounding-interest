@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investment Compounding Visualizer</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Investment Compounding Visualizer</h1>
+    <p class="subtitle">See how consistent investing grows your wealth over time</p>
+
+    <div class="controls">
+      <div class="input-group">
+        <label for="monthlyInvestment">Monthly Investment (EUR)</label>
+        <input type="number" id="monthlyInvestment" value="200" min="1" step="50">
+      </div>
+      <div class="input-group">
+        <label for="annualReturn">Expected Annual Return (%)</label>
+        <input type="number" id="annualReturn" value="8" min="0" max="30" step="0.5">
+        <span class="hint">DAX long-term avg: ~8%</span>
+      </div>
+      <div class="input-group">
+        <label for="volatility">Annual Volatility (%)</label>
+        <input type="number" id="volatility" value="20" min="0" max="60" step="1">
+        <span class="hint">DAX historical avg: ~20%</span>
+      </div>
+      <div class="input-group">
+        <label for="years">Investment Horizon (years)</label>
+        <input type="number" id="years" value="30" min="1" max="60" step="1">
+      </div>
+      <div class="input-group">
+        <label for="startingAge">Starting Age</label>
+        <input type="number" id="startingAge" value="25" min="1" max="99" step="1">
+      </div>
+      <div class="input-group btn-group">
+        <button id="rerollBtn" class="btn-reroll">New Simulation</button>
+      </div>
+    </div>
+
+    <div class="starting-investment-row">
+      <label class="checkbox-label">
+        <input type="checkbox" id="startingInvestmentToggle">
+        Add starting investment
+      </label>
+      <div class="starting-amount-wrapper" id="startingAmountWrapper">
+        <input type="number" id="startingAmount" value="10000" min="0" step="500" placeholder="Amount in EUR">
+        <span class="hint">EUR</span>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <canvas id="chart"></canvas>
+    </div>
+
+    <div class="summary">
+      <div class="stat">
+        <span class="stat-label">Total Invested</span>
+        <span class="stat-value" id="totalInvested">&mdash;</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Simulated Value</span>
+        <span class="stat-value simulated" id="simulatedValue">&mdash;</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Total Gains</span>
+        <span class="stat-value" id="totalGains">&mdash;</span>
+        <span class="stat-pct" id="totalGainsPct"></span>
+      </div>
+    </div>
+
+    <div class="table-section">
+      <div class="table-header">
+        <h2>Portfolio Development</h2>
+        <div class="toggle-group">
+          <button class="toggle-btn active" data-view="yearly">Yearly</button>
+          <button class="toggle-btn" data-view="monthly">Monthly</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table id="portfolioTable">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Investment in Period</th>
+              <th>Total Investment</th>
+              <th>Period Return</th>
+              <th>Period Return %</th>
+              <th>Total Returns</th>
+              <th>Total Return %</th>
+              <th>Portfolio Value</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
