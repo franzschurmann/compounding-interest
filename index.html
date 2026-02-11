@@ -9,50 +9,92 @@
 </head>
 <body>
   <div class="container">
-    <h1>Investment Compounding Visualizer</h1>
+    <div class="title-row">
+      <h1>Investment Compounding Visualizer</h1>
+      <button class="theme-toggle" id="themeToggle">Light Mode</button>
+    </div>
     <p class="subtitle">See how consistent investing grows your wealth over time</p>
 
     <div class="controls">
       <div class="input-group">
         <label for="monthlyInvestment">Monthly Investment (EUR)</label>
-        <input type="number" id="monthlyInvestment" value="200" min="1" step="50">
+        <input type="number" id="monthlyInvestment" value="400" min="1" step="50">
       </div>
       <div class="input-group">
         <label for="annualReturn">Expected Annual Return (%)</label>
-        <input type="number" id="annualReturn" value="8" min="0" max="30" step="0.5">
-        <span class="hint">DAX long-term avg: ~8%</span>
+        <input type="number" id="annualReturn" value="10" min="0" max="30" step="0.5">
+        <span class="hint">DAX 50yr avg: ~10.5%</span>
       </div>
       <div class="input-group">
         <label for="volatility">Annual Volatility (%)</label>
-        <input type="number" id="volatility" value="20" min="0" max="60" step="1">
-        <span class="hint">DAX historical avg: ~20%</span>
+        <input type="number" id="volatility" value="23" min="0" max="60" step="1">
+        <span class="hint">DAX 50yr volatility: ~23%</span>
       </div>
       <div class="input-group">
         <label for="years">Investment Horizon (years)</label>
-        <input type="number" id="years" value="30" min="1" max="60" step="1">
+        <input type="number" id="years" value="40" min="1" max="60" step="1">
       </div>
       <div class="input-group">
         <label for="startingAge">Starting Age</label>
         <input type="number" id="startingAge" value="25" min="1" max="99" step="1">
       </div>
+      <div class="starting-investment-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="startingInvestmentToggle">
+          Add starting investment
+        </label>
+        <div class="starting-amount-wrapper" id="startingAmountWrapper">
+          <input type="number" id="startingAmount" value="10000" min="0" step="500" placeholder="Amount in EUR">
+          <span class="hint">EUR</span>
+        </div>
+      </div>
       <div class="input-group btn-group">
-        <button id="rerollBtn" class="btn-reroll">New Simulation</button>
+        <button id="rerollBtn" class="btn-reroll">Refresh</button>
       </div>
     </div>
 
-    <div class="starting-investment-row">
+    <div class="salary-section">
+      <h3>Income-Linked Investment (Optional)</h3>
       <label class="checkbox-label">
-        <input type="checkbox" id="startingInvestmentToggle">
-        Add starting investment
+        <input type="checkbox" id="salaryGrowthToggle">
+        Invest more when income increases
       </label>
-      <div class="starting-amount-wrapper" id="startingAmountWrapper">
-        <input type="number" id="startingAmount" value="10000" min="0" step="500" placeholder="Amount in EUR">
-        <span class="hint">EUR</span>
-      </div>
-    </div>
 
-    <div class="chart-container">
-      <canvas id="chart"></canvas>
+      <div class="salary-inputs" id="salaryInputs" style="display: none;">
+        <div class="input-group">
+          <label for="netSalary">Monthly Net Salary (EUR)</label>
+          <input type="number" id="netSalary" value="3000" min="0" step="100">
+          <span class="hint">After-tax income</span>
+        </div>
+
+        <div class="input-group">
+          <label for="investmentRate">Savings Rate (%)</label>
+          <input type="number" id="investmentRate" value="10" min="0" max="100" step="1">
+          <span class="hint">% of net salary invested monthly</span>
+        </div>
+
+        <div class="input-group">
+          <label>Career Milestones</label>
+          <div class="milestone-options">
+            <label class="checkbox-label small">
+              <input type="checkbox" id="milestone3yr" checked>
+              Job change at Year 3 (+20%)
+            </label>
+            <label class="checkbox-label small">
+              <input type="checkbox" id="milestone6yr" checked>
+              Promotion at Year 6 (+18%)
+            </label>
+            <label class="checkbox-label small">
+              <input type="checkbox" id="milestone10yr" checked>
+              Job change at Year 10 (+22%)
+            </label>
+            <label class="checkbox-label small">
+              <input type="checkbox" id="milestone15yr">
+              Leadership role at Year 15 (+25%)
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="summary">
@@ -71,6 +113,10 @@
       </div>
     </div>
 
+    <div class="chart-container">
+      <canvas id="chart"></canvas>
+    </div>
+
     <div class="table-section">
       <div class="table-header">
         <h2>Portfolio Development</h2>
@@ -85,12 +131,33 @@
             <tr>
               <th>Period</th>
               <th>Investment in Period</th>
-              <th>Total Investment</th>
               <th>Period Return</th>
               <th>Period Return %</th>
+              <th>Total Investment</th>
+              <th>Portfolio Value</th>
               <th>Total Returns</th>
               <th>Total Return %</th>
-              <th>Portfolio Value</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="table-section" id="salaryTableSection" style="display: none;">
+      <div class="table-header">
+        <h2>Salary & Investment Progression</h2>
+      </div>
+      <div class="table-wrapper">
+        <table id="salaryTable">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Age</th>
+              <th>Monthly Net Salary</th>
+              <th>Monthly Investment</th>
+              <th>Annual Investment</th>
+              <th>Milestone</th>
             </tr>
           </thead>
           <tbody></tbody>

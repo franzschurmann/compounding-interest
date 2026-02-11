@@ -1,3 +1,29 @@
+// ── Theme ──
+
+function getCSSColor(varName) {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  return value || "transparent";
+}
+
+const themeToggle = document.getElementById("themeToggle");
+
+function applyTheme(scheme) {
+  document.documentElement.style.colorScheme = scheme;
+  themeToggle.textContent = scheme === "dark" ? "Light Mode" : "Dark Mode";
+  localStorage.setItem("theme", scheme);
+  // Recreate chart with new theme colors
+  if (chart) {
+    chart.destroy();
+    chart = null;
+  }
+  calculate();
+}
+
+themeToggle.addEventListener("click", () => {
+  const current = document.documentElement.style.colorScheme || "dark";
+  applyTheme(current === "dark" ? "light" : "dark");
+});
+
 const inputs = {
   monthlyInvestment: document.getElementById("monthlyInvestment"),
   annualReturn: document.getElementById("annualReturn"),
@@ -38,21 +64,98 @@ function randomNormal(mean, stdDev) {
   return mean + stdDev * z;
 }
 
+// Generate salary progression based on milestones
+function generateSalarySchedule(startingNetMonthly, totalYears, milestones) {
+  const schedule = [];
+  let currentSalary = startingNetMonthly;
+
+  for (let year = 0; year < totalYears; year++) {
+    // Check for milestone
+    if (milestones[year]) {
+      currentSalary *= (1 + milestones[year]);
+    }
+
+    // Add 12 months of this year's salary
+    for (let month = 0; month < 12; month++) {
+      schedule.push(currentSalary);
+    }
+  }
+
+  return schedule;
+}
+
+// Generate investment schedule from salary schedule
+function generateInvestmentSchedule(salarySchedule, investmentRatePct) {
+  return salarySchedule.map(salary => salary * (investmentRatePct / 100));
+}
+
 // Monte Carlo simulation using log-normal returns (geometric Brownian motion).
 // The drift term includes the Ito correction (-0.5 * sigma^2) so that the
 // *expected* compounded return matches the user-supplied annual return.
-function simulateGrowth(monthlyAmount, annualReturnPct, annualVolPct, totalYears, startingBalance) {
+// Includes mean reversion (AR(1) model) to increase probability of recovery
+// after drawdowns, matching historical market behavior (e.g., DAX -40% in 2008
+// followed by +24% in 2009).
+// Note: 23% annual volatility produces ±5-10% monthly swings, matching DAX
+// historical volatility. Mean reversion strength (φ = -0.35) provides moderate
+// reversion without overcorrecting.
+function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, totalYears, startingBalance) {
   const annualVol = annualVolPct / 100;
+  // Monthly volatility: annual volatility scaled by sqrt(1/12)
   const monthlyStdDev = annualVol / Math.sqrt(12);
-  // Drift per month: continuous-rate equivalent of the desired annual return,
-  // minus the variance drag so E[exp(logReturn)] = (1+r)^(1/12)
-  const drift = (Math.log(1 + annualReturnPct / 100) - 0.5 * annualVol * annualVol) / 12;
+  // Drift per month: annualized return spread over 12 months,
+  // adjusted for volatility drag (Ito correction)
+  const annualDrift = Math.log(1 + annualReturnPct / 100) - 0.5 * annualVol * annualVol;
+  const baseDrift = annualDrift / 12;
+
+  // Mean reversion coefficient (negative value pulls returns back to mean)
+  // φ = -0.35 provides moderate mean reversion: after a -30% year, drift
+  // increases by ~10.5%, making recovery more likely
+  const meanReversionStrength = -0.35;
+
   const totalMonths = totalYears * 12;
   const entries = [];
   let balance = startingBalance;
   let totalInvested = startingBalance;
 
   for (let m = 1; m <= totalMonths; m++) {
+    // If schedule provided, use varying amounts; otherwise fixed
+    const monthlyAmount = Array.isArray(monthlyAmountOrSchedule)
+      ? monthlyAmountOrSchedule[m - 1]
+      : monthlyAmountOrSchedule;
+
+    let drift = baseDrift;
+
+    // Apply mean reversion at year boundaries (every 12 months)
+    // Check at the start of each new year (months 13, 25, 37, etc.)
+    if (m > 12 && m % 12 === 1) {
+      // Get the balance from end of previous year (one month ago) and 12 months ago
+      const currentYearEndIdx = entries.length - 1;  // This is month m-1 (end of previous year)
+      const prevYearEndIdx = entries.length - 13;     // This is month m-13 (12 months back)
+
+      if (prevYearEndIdx >= 0 && currentYearEndIdx >= 0) {
+        const currentYearEnd = entries[currentYearEndIdx];
+        const prevYearEnd = entries[prevYearEndIdx];
+
+        // Calculate actual return over the previous year
+        const yearInvestment = currentYearEnd.totalInvested - prevYearEnd.totalInvested;
+        const yearGain = currentYearEnd.balance - prevYearEnd.balance - yearInvestment;
+        const yearReturn = prevYearEnd.balance > 0 ? yearGain / prevYearEnd.balance : 0;
+
+        // Expected annual return (geometric mean from drift)
+        const expectedAnnualReturn = Math.exp(annualDrift) - 1;
+
+        // Deviation from expected return
+        const deviation = yearReturn - expectedAnnualReturn;
+
+        // Mean reversion adjustment: negative year (large negative deviation)
+        // leads to positive drift adjustment, increasing recovery probability
+        const meanReversionAdjustment = meanReversionStrength * deviation;
+
+        // Spread the annual adjustment over the next 12 months
+        drift = baseDrift - (meanReversionAdjustment / 12);
+      }
+    }
+
     let growthFactor;
     if (annualVolPct === 0) {
       growthFactor = Math.pow(1 + annualReturnPct / 100, 1 / 12);
@@ -89,13 +192,56 @@ function calculate() {
   const startAge = parseInt(inputs.startingAge.value) || 25;
   const startingBalance = getStartingBalance();
 
+  // Check if salary growth is enabled
+  const salaryGrowthEnabled = document.getElementById("salaryGrowthToggle").checked;
+  let investmentSchedule;
+  let monthlyInvestmentForChart = monthly;
+
+  if (salaryGrowthEnabled) {
+    const netSalary = parseFloat(document.getElementById("netSalary").value) || 3000;
+    const investmentRate = parseFloat(document.getElementById("investmentRate").value) || 10;
+
+    // Collect enabled milestones
+    const milestones = {};
+    if (document.getElementById("milestone3yr").checked) milestones[3] = 0.20;
+    if (document.getElementById("milestone6yr").checked) milestones[6] = 0.18;
+    if (document.getElementById("milestone10yr").checked) milestones[10] = 0.22;
+    if (document.getElementById("milestone15yr").checked) milestones[15] = 0.25;
+
+    // Generate schedules
+    const salarySchedule = generateSalarySchedule(netSalary, years, milestones);
+    investmentSchedule = generateInvestmentSchedule(salarySchedule, investmentRate);
+
+    // Show salary table
+    document.getElementById("salaryTableSection").style.display = "block";
+    updateSalaryTable(salarySchedule, investmentSchedule, startAge, milestones);
+
+    // Use average investment for chart label purposes
+    monthlyInvestmentForChart = investmentSchedule.reduce((a, b) => a + b, 0) / investmentSchedule.length;
+  } else {
+    // Fixed investment
+    investmentSchedule = monthly;
+    document.getElementById("salaryTableSection").style.display = "none";
+  }
+
   const labels = Array.from({ length: years + 1 }, (_, i) => startAge + i);
 
-  // Total investment line (yearly)
-  const totalInvestmentLine = labels.map((_, i) => startingBalance + monthly * 12 * i);
+  // Total investment line (yearly) - needs to calculate based on schedule if available
+  let totalInvestmentLine;
+  if (Array.isArray(investmentSchedule)) {
+    totalInvestmentLine = [startingBalance];
+    let cumulativeInvestment = startingBalance;
+    for (let y = 0; y < years; y++) {
+      const yearInvestment = investmentSchedule.slice(y * 12, (y + 1) * 12).reduce((a, b) => a + b, 0);
+      cumulativeInvestment += yearInvestment;
+      totalInvestmentLine.push(cumulativeInvestment);
+    }
+  } else {
+    totalInvestmentLine = labels.map((_, i) => startingBalance + monthly * 12 * i);
+  }
 
   // Randomized simulation (monthly granularity)
-  currentSimulation = simulateGrowth(monthly, annualReturn, vol, years, startingBalance);
+  currentSimulation = simulateGrowth(investmentSchedule, annualReturn, vol, years, startingBalance);
 
   // Extract yearly data points from simulation for the chart (every 12th month)
   const simulated = [startingBalance];
@@ -107,8 +253,8 @@ function calculate() {
   const simulatedTotalReturnPct = [];
   const simulatedTrailing12mPct = [];
   for (let y = 0; y <= years; y++) {
-    const totalInvestedAtYear = startingBalance + monthly * 12 * y;
     const balanceAtYear = simulated[y];
+    const totalInvestedAtYear = totalInvestmentLine[y];
     simulatedTotalReturnPct.push(
       totalInvestedAtYear > 0
         ? ((balanceAtYear - totalInvestedAtYear) / totalInvestedAtYear) * 100
@@ -118,7 +264,7 @@ function calculate() {
       simulatedTrailing12mPct.push(null);
     } else {
       const prevBalance = simulated[y - 1];
-      const yearContributions = monthly * 12;
+      const yearContributions = totalInvestmentLine[y] - totalInvestmentLine[y - 1];
       simulatedTrailing12mPct.push(
         prevBalance > 0
           ? ((balanceAtYear - prevBalance - yearContributions) / prevBalance) * 100
@@ -128,7 +274,7 @@ function calculate() {
   }
 
   // Update summary stats from simulation
-  const totalInvested = startingBalance + monthly * 12 * years;
+  const totalInvested = totalInvestmentLine[years];
   const finalSimulated = currentSimulation.length > 0
     ? currentSimulation[currentSimulation.length - 1].balance
     : startingBalance;
@@ -156,11 +302,16 @@ function calculate() {
 let chart = null;
 
 function updateChart(labels, data) {
+  const accentColor = "#58a6ff";
+  const hintColor = "#6e7681";
+  const mutedColor = "#8b949e";
+  const gridColor = "rgba(48,54,61,0.5)";
+
   const datasets = [
     {
       label: "Simulated Value",
       data: data.simulated,
-      borderColor: "#58a6ff",
+      borderColor: accentColor,
       backgroundColor: "transparent",
       fill: false,
       borderWidth: 2.5,
@@ -170,9 +321,9 @@ function updateChart(labels, data) {
       simulatedTrailing12mPct: data.simulatedTrailing12mPct,
     },
     {
-      label: "Total Investment",
+      label: "Total Invested",
       data: data.totalInvestmentLine,
-      borderColor: "#6e7681",
+      borderColor: hintColor,
       backgroundColor: "transparent",
       fill: false,
       borderWidth: 2,
@@ -198,13 +349,18 @@ function updateChart(labels, data) {
       plugins: {
         legend: {
           labels: {
-            color: "#8b949e",
-            usePointStyle: true,
+            color: mutedColor,
+            usePointStyle: false,
             padding: 16,
             font: { size: 13, weight: "500" },
           },
         },
         tooltip: {
+          backgroundColor: "rgba(15, 17, 23, 0.9)",
+          borderColor: "#30363d",
+          borderWidth: 1,
+          titleColor: "#e1e4e8",
+          bodyColor: "#e1e4e8",
           callbacks: {
             label: (ctx) => {
               const ds = ctx.dataset;
@@ -227,17 +383,17 @@ function updateChart(labels, data) {
       },
       scales: {
         x: {
-          title: { display: true, text: "Age", color: "#8b949e" },
-          ticks: { color: "#6e7681" },
-          grid: { color: "rgba(48,54,61,0.5)" },
+          title: { display: true, text: "Age", color: mutedColor },
+          ticks: { color: hintColor },
+          grid: { color: gridColor },
         },
         y: {
-          title: { display: true, text: "Portfolio Value (EUR)", color: "#8b949e" },
+          title: { display: true, text: "Portfolio Value (EUR)", color: mutedColor },
           ticks: {
-            color: "#6e7681",
+            color: hintColor,
             callback: (v) => formatEUR(v),
           },
-          grid: { color: "rgba(48,54,61,0.5)" },
+          grid: { color: gridColor },
         },
       },
     },
@@ -309,15 +465,47 @@ function updateTable() {
       (r) => `<tr>
         <td>${r.period}</td>
         <td>${formatEUR(r.investment)}</td>
-        <td>${formatEUR(r.totalInvested)}</td>
         <td class="${r.periodReturn >= 0 ? "positive" : "negative"}">${formatEUR(r.periodReturn)}</td>
         <td class="${r.periodReturnPct >= 0 ? "positive" : "negative"}">${r.periodReturnPct >= 0 ? "+" : ""}${r.periodReturnPct.toFixed(1)}%</td>
+        <td>${formatEUR(r.totalInvested)}</td>
+        <td>${formatEUR(r.value)}</td>
         <td class="${r.totalReturns >= 0 ? "positive" : "negative"}">${formatEUR(r.totalReturns)}</td>
         <td class="${r.totalReturnPct >= 0 ? "positive" : "negative"}">${r.totalReturnPct >= 0 ? "+" : ""}${r.totalReturnPct.toFixed(1)}%</td>
-        <td>${formatEUR(r.value)}</td>
       </tr>`
     )
     .join("");
+}
+
+function updateSalaryTable(salarySchedule, investmentSchedule, startAge, milestones) {
+  const tbody = document.querySelector("#salaryTable tbody");
+  const years = salarySchedule.length / 12;
+  const rows = [];
+
+  for (let year = 0; year < years; year++) {
+    const monthIndex = year * 12;
+    const monthlySalary = salarySchedule[monthIndex];
+    const monthlyInvestment = investmentSchedule[monthIndex];
+    const annualInvestment = monthlyInvestment * 12;
+    const age = startAge + year;
+
+    // Check for milestone
+    let milestone = "—";
+    if (milestones[year]) {
+      const pct = (milestones[year] * 100).toFixed(0);
+      milestone = `+${pct}% raise`;
+    }
+
+    rows.push(`<tr>
+      <td>Year ${year + 1}</td>
+      <td>${age}</td>
+      <td>${formatEUR(monthlySalary)}</td>
+      <td>${formatEUR(monthlyInvestment)}</td>
+      <td>${formatEUR(annualInvestment)}</td>
+      <td>${milestone}</td>
+    </tr>`);
+  }
+
+  tbody.innerHTML = rows.join("");
 }
 
 // ── Event Listeners ──
@@ -342,4 +530,33 @@ document.querySelectorAll(".toggle-btn").forEach((btn) => {
   });
 });
 
+// Salary growth toggle
+document.getElementById("salaryGrowthToggle").addEventListener("change", (e) => {
+  const visible = e.target.checked;
+  document.getElementById("salaryInputs").style.display = visible ? "grid" : "none";
+
+  // Update monthly investment field state
+  inputs.monthlyInvestment.disabled = visible;
+  if (visible) {
+    inputs.monthlyInvestment.parentElement.style.opacity = "0.5";
+  } else {
+    inputs.monthlyInvestment.parentElement.style.opacity = "1";
+  }
+
+  calculate();
+});
+
+// Recalculate on salary input changes
+document.getElementById("netSalary").addEventListener("input", calculate);
+document.getElementById("investmentRate").addEventListener("input", calculate);
+document.getElementById("milestone3yr").addEventListener("change", calculate);
+document.getElementById("milestone6yr").addEventListener("change", calculate);
+document.getElementById("milestone10yr").addEventListener("change", calculate);
+document.getElementById("milestone15yr").addEventListener("change", calculate);
+
+// ── Init ──
+
+const savedTheme = localStorage.getItem("theme") || "dark";
+document.documentElement.style.colorScheme = savedTheme;
+themeToggle.textContent = savedTheme === "dark" ? "Light Mode" : "Dark Mode";
 calculate();
