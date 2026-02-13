@@ -256,7 +256,9 @@ function calculate() {
   }
 
   // Update summary stats from simulation
-  const totalInvested = totalInvestmentLine[years];
+  const totalInvested = currentSimulation.length > 0
+    ? currentSimulation[currentSimulation.length - 1].totalInvested
+    : startingBalance;
   const finalSimulated = currentSimulation.length > 0
     ? currentSimulation[currentSimulation.length - 1].balance
     : startingBalance;
