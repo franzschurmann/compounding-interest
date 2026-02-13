@@ -417,13 +417,19 @@ function updateTable() {
     for (let i = 11; i < currentSimulation.length; i += 12) {
       const entry = currentSimulation[i];
       const yearNum = Math.floor(i / 12) + 1;
-      const prevBalance = i >= 12 ? currentSimulation[i - 12].balance : startingBalance;
       // Calculate actual investment for this year by summing 12 months from simulation
       const yearStartIdx = i - 11; // First month of this year (e.g., i=11 → yearStartIdx=0)
       let periodInvestment = 0;
       for (let k = yearStartIdx; k <= i; k++) {
         periodInvestment += currentSimulation[k].invested;
       }
+      // For the first year, include starting balance in the investment amount
+      const isFirstYear = i === 11;
+      if (isFirstYear) {
+        periodInvestment += startingBalance;
+      }
+      // For first year, opening balance before investments is 0; for other years, it's the previous year-end balance
+      const prevBalance = isFirstYear ? 0 : currentSimulation[i - 12].balance;
       const periodReturn = entry.balance - prevBalance - periodInvestment;
       const periodReturnPct = prevBalance + periodInvestment > 0
         ? (periodReturn / (prevBalance + periodInvestment)) * 100
@@ -446,10 +452,17 @@ function updateTable() {
   } else {
     for (let j = 0; j < currentSimulation.length; j++) {
       const entry = currentSimulation[j];
-      const prevBalance = j > 0 ? currentSimulation[j - 1].balance : startingBalance;
-      const periodReturn = entry.balance - prevBalance - entry.invested;
-      const periodReturnPct = prevBalance + entry.invested > 0
-        ? (periodReturn / (prevBalance + entry.invested)) * 100
+      // For first month, include starting balance in the investment amount
+      const isFirstMonth = j === 0;
+      let periodInvestment = entry.invested;
+      if (isFirstMonth) {
+        periodInvestment += startingBalance;
+      }
+      // For first month, opening balance before investments is 0; for other months, it's the previous month-end balance
+      const prevBalance = isFirstMonth ? 0 : currentSimulation[j - 1].balance;
+      const periodReturn = entry.balance - prevBalance - periodInvestment;
+      const periodReturnPct = prevBalance + periodInvestment > 0
+        ? (periodReturn / (prevBalance + periodInvestment)) * 100
         : 0;
       const totalReturns = entry.balance - entry.totalInvested;
       const totalReturnPct = entry.totalInvested > 0
@@ -457,7 +470,7 @@ function updateTable() {
         : 0;
       rows.push({
         period: `Month ${entry.month}`,
-        investment: entry.invested,
+        investment: periodInvestment,
         totalInvested: entry.totalInvested,
         periodReturn,
         periodReturnPct,
