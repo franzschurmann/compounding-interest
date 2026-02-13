@@ -92,12 +92,12 @@ function generateInvestmentSchedule(salarySchedule, investmentRatePct) {
 // Monte Carlo simulation using log-normal returns (geometric Brownian motion).
 // The drift term includes the Ito correction (-0.5 * sigma^2) so that the
 // *expected* compounded return matches the user-supplied annual return.
-// Includes mean reversion (AR(1) model) to increase probability of recovery
-// after drawdowns, matching historical market behavior (e.g., DAX -40% in 2008
-// followed by +24% in 2009).
-// Note: 23% annual volatility produces ±5-10% monthly swings, matching DAX
-// historical volatility. Mean reversion strength (φ = -0.35) provides moderate
-// reversion without overcorrecting.
+// Includes mean reversion (AR(1) model) at monthly level to realistically
+// reduce clustering of extreme returns. Negative months bias the next month
+// toward positive returns, and vice versa. This prevents unrealistic
+// multi-year bear/bull markets (e.g., DAX -40% in 2008 followed by +24% in 2009).
+// Mean reversion strength (φ = 0.25) is moderate: after a -10% month, next
+// month's drift increases by ~2.5%, making recovery more likely.
 function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, totalYears, startingBalance) {
   const annualVol = annualVolPct / 100;
   // Monthly volatility: annual volatility scaled by sqrt(1/12)
@@ -107,15 +107,16 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
   const annualDrift = Math.log(1 + annualReturnPct / 100) - 0.5 * annualVol * annualVol;
   const baseDrift = annualDrift / 12;
 
-  // Mean reversion coefficient (negative value pulls returns back to mean)
-  // φ = -0.35 provides moderate mean reversion: after a -30% year, drift
-  // increases by ~10.5%, making recovery more likely
-  const meanReversionStrength = -0.35;
+  // Mean reversion strength (positive value pulls returns back to mean)
+  // φ = 0.25 provides moderate mean reversion: after a -10% month, drift
+  // increases by ~2.5%, making recovery more likely the following month
+  const meanReversionStrength = 0.25;
 
   const totalMonths = totalYears * 12;
   const entries = [];
   let balance = startingBalance;
   let totalInvested = startingBalance;
+  let prevLogReturn = 0;  // Track previous month's return for AR(1) calculation
 
   for (let m = 1; m <= totalMonths; m++) {
     // If schedule provided, use varying amounts; otherwise fixed
@@ -123,45 +124,19 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
       ? monthlyAmountOrSchedule[m - 1]
       : monthlyAmountOrSchedule;
 
-    let drift = baseDrift;
-
-    // Apply mean reversion at year boundaries (every 12 months)
-    // Check at the start of each new year (months 13, 25, 37, etc.)
-    if (m > 12 && m % 12 === 1) {
-      // Get the balance from end of previous year (one month ago) and 12 months ago
-      const currentYearEndIdx = entries.length - 1;  // This is month m-1 (end of previous year)
-      const prevYearEndIdx = entries.length - 13;     // This is month m-13 (12 months back)
-
-      if (prevYearEndIdx >= 0 && currentYearEndIdx >= 0) {
-        const currentYearEnd = entries[currentYearEndIdx];
-        const prevYearEnd = entries[prevYearEndIdx];
-
-        // Calculate actual return over the previous year
-        const yearInvestment = currentYearEnd.totalInvested - prevYearEnd.totalInvested;
-        const yearGain = currentYearEnd.balance - prevYearEnd.balance - yearInvestment;
-        const yearReturn = prevYearEnd.balance > 0 ? yearGain / prevYearEnd.balance : 0;
-
-        // Expected annual return (geometric mean from drift)
-        const expectedAnnualReturn = Math.exp(annualDrift) - 1;
-
-        // Deviation from expected return
-        const deviation = yearReturn - expectedAnnualReturn;
-
-        // Mean reversion adjustment: negative year (large negative deviation)
-        // leads to positive drift adjustment, increasing recovery probability
-        const meanReversionAdjustment = meanReversionStrength * deviation;
-
-        // Spread the annual adjustment over the next 12 months
-        drift = baseDrift - (meanReversionAdjustment / 12);
-      }
-    }
+    // AR(1) mean reversion: pull this month's drift toward baseline if last month was extreme
+    // If last month was very negative (negative logReturn), increase drift to encourage recovery
+    // If last month was very positive, decrease drift slightly
+    const drift = baseDrift + (meanReversionStrength * -prevLogReturn);
 
     let growthFactor;
     if (annualVolPct === 0) {
       growthFactor = Math.pow(1 + annualReturnPct / 100, 1 / 12);
+      prevLogReturn = Math.log(growthFactor);
     } else {
       const logReturn = randomNormal(drift, monthlyStdDev);
       growthFactor = Math.exp(logReturn);
+      prevLogReturn = logReturn;
     }
     balance = balance * growthFactor + monthlyAmount;
     totalInvested += monthlyAmount;
