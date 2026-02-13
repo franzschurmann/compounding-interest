@@ -108,9 +108,11 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
   const baseDrift = annualDrift / 12;
 
   // Mean reversion strength (positive value pulls returns back to mean)
-  // φ = 0.25 provides moderate mean reversion: after a -10% month, drift
-  // increases by ~2.5%, making recovery more likely the following month
-  const meanReversionStrength = 0.25;
+  // φ = 0.45 provides strong mean reversion: after a -10% month, drift
+  // increases by ~4.5%, making recovery more likely the following month
+  // Based on empirical studies (Fama & French 1988, others) showing φ ≈ 0.3-0.5
+  // for weekly-monthly stock returns with clustering effects
+  const meanReversionStrength = 0.45;
 
   const totalMonths = totalYears * 12;
   const entries = [];
@@ -199,50 +201,55 @@ function calculate() {
     document.getElementById("salaryTableSection").style.display = "none";
   }
 
-  const labels = Array.from({ length: years + 1 }, (_, i) => startAge + i);
-
-  // Total investment line (yearly) - needs to calculate based on schedule if available
-  let totalInvestmentLine;
-  if (Array.isArray(investmentSchedule)) {
-    totalInvestmentLine = [startingBalance];
-    let cumulativeInvestment = startingBalance;
-    for (let y = 0; y < years; y++) {
-      const yearInvestment = investmentSchedule.slice(y * 12, (y + 1) * 12).reduce((a, b) => a + b, 0);
-      cumulativeInvestment += yearInvestment;
-      totalInvestmentLine.push(cumulativeInvestment);
-    }
-  } else {
-    totalInvestmentLine = labels.map((_, i) => startingBalance + monthly * 12 * i);
-  }
-
   // Randomized simulation (monthly granularity)
   currentSimulation = simulateGrowth(investmentSchedule, annualReturn, vol, years, startingBalance);
 
-  // Extract yearly data points from simulation for the chart (every 12th month)
+  // Create monthly labels and data for the chart (all months, not just yearly)
+  const monthlyLabels = Array.from(
+    { length: currentSimulation.length + 1 },
+    (_, i) => i
+  ); // [0, 1, 2, ..., totalMonths]
+
+  // Extract monthly data points from simulation
   const simulated = [startingBalance];
-  for (let i = 11; i < currentSimulation.length; i += 12) {
-    simulated.push(currentSimulation[i].balance);
+  for (let m = 0; m < currentSimulation.length; m++) {
+    simulated.push(currentSimulation[m].balance);
   }
 
-  // Pre-compute tooltip data for the simulated line
+  // Create monthly total investment line
+  const totalInvestmentLine = [startingBalance];
+  for (let m = 0; m < currentSimulation.length; m++) {
+    totalInvestmentLine.push(currentSimulation[m].totalInvested);
+  }
+
+  // Pre-compute tooltip data for monthly granularity
   const simulatedTotalReturnPct = [];
   const simulatedTrailing12mPct = [];
-  for (let y = 0; y <= years; y++) {
-    const balanceAtYear = simulated[y];
-    const totalInvestedAtYear = totalInvestmentLine[y];
+
+  // Starting balance
+  simulatedTotalReturnPct.push(0);
+  simulatedTrailing12mPct.push(null);
+
+  // Each month
+  for (let m = 0; m < currentSimulation.length; m++) {
+    const entry = currentSimulation[m];
+
+    // Total return %
     simulatedTotalReturnPct.push(
-      totalInvestedAtYear > 0
-        ? ((balanceAtYear - totalInvestedAtYear) / totalInvestedAtYear) * 100
+      entry.totalInvested > 0
+        ? ((entry.balance - entry.totalInvested) / entry.totalInvested) * 100
         : 0
     );
-    if (y === 0) {
+
+    // Trailing 12 month return
+    if (m < 12) {
       simulatedTrailing12mPct.push(null);
     } else {
-      const prevBalance = simulated[y - 1];
-      const yearContributions = totalInvestmentLine[y] - totalInvestmentLine[y - 1];
+      const prevEntry = currentSimulation[m - 12];
+      const investmentInLast12Months = entry.totalInvested - prevEntry.totalInvested;
       simulatedTrailing12mPct.push(
-        prevBalance > 0
-          ? ((balanceAtYear - prevBalance - yearContributions) / prevBalance) * 100
+        prevEntry.balance > 0
+          ? ((entry.balance - prevEntry.balance - investmentInLast12Months) / prevEntry.balance) * 100
           : 0
       );
     }
@@ -263,12 +270,12 @@ function calculate() {
   stats.totalGains.className = `stat-value ${colorClass}`;
   stats.totalGainsPct.className = `stat-pct ${colorClass}`;
 
-  updateChart(labels, {
+  updateChart(monthlyLabels, {
     totalInvestmentLine,
     simulated,
     simulatedTotalReturnPct,
     simulatedTrailing12mPct,
-  });
+  }, startAge);
   updateTable();
 }
 
@@ -276,7 +283,7 @@ function calculate() {
 
 let chart = null;
 
-function updateChart(labels, data) {
+function updateChart(labels, data, startAge) {
   const accentColor = "#58a6ff";
   const hintColor = "#6e7681";
   const mutedColor = "#8b949e";
@@ -337,6 +344,15 @@ function updateChart(labels, data) {
           titleColor: "#e1e4e8",
           bodyColor: "#e1e4e8",
           callbacks: {
+            title: (context) => {
+              // Format month index as "X y Y m" (years and months)
+              if (context.length === 0) return "";
+              const monthIndex = context[0].label;
+              const years = Math.floor(monthIndex / 12);
+              const months = monthIndex % 12;
+              if (monthIndex === 0) return "Start";
+              return `${years} y ${months} m`;
+            },
             label: (ctx) => {
               const ds = ctx.dataset;
               const base = `${ds.label}: ${formatEUR(ctx.parsed.y)}`;
@@ -359,7 +375,17 @@ function updateChart(labels, data) {
       scales: {
         x: {
           title: { display: true, text: "Age", color: mutedColor },
-          ticks: { color: hintColor },
+          ticks: {
+            color: hintColor,
+            callback: (value, index) => {
+              // Show only every 12th tick (yearly)
+              if (index % 12 === 0) {
+                const ageOffset = index / 12;
+                return startAge + ageOffset;
+              }
+              return null;
+            },
+          },
           grid: { color: gridColor },
         },
         y: {
@@ -390,7 +416,12 @@ function updateTable() {
       const entry = currentSimulation[i];
       const yearNum = Math.floor(i / 12) + 1;
       const prevBalance = i >= 12 ? currentSimulation[i - 12].balance : startingBalance;
-      const periodInvestment = monthly * 12;
+      // Calculate actual investment for this year by summing 12 months from simulation
+      const yearStartIdx = i - 11; // First month of this year (e.g., i=11 → yearStartIdx=0)
+      let periodInvestment = 0;
+      for (let k = yearStartIdx; k <= i; k++) {
+        periodInvestment += currentSimulation[k].invested;
+      }
       const periodReturn = entry.balance - prevBalance - periodInvestment;
       const periodReturnPct = prevBalance + periodInvestment > 0
         ? (periodReturn / (prevBalance + periodInvestment)) * 100
