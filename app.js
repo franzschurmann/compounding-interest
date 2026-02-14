@@ -91,8 +91,8 @@ function generateInvestmentSchedule(salarySchedule, investmentRatePct) {
 }
 
 // Monte Carlo simulation using geometric Brownian motion (log-normal returns).
-// The drift term includes the Ito correction (-0.5 * sigma^2) so that the
-// *expected* compounded return matches the user-supplied annual return.
+// The drift targets the geometric mean (CAGR), so the median outcome matches
+// the user-supplied annual return. Volatility creates variance around this median.
 //
 // This simulation implements proper dollar-cost averaging (DCA) by tracking shares:
 // 1. Share price changes based on market returns (pure random walk)
@@ -103,9 +103,9 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
   const annualVol = annualVolPct / 100;
   // Monthly volatility: annual volatility scaled by sqrt(1/12)
   const monthlyStdDev = annualVol / Math.sqrt(12);
-  // Drift per month: annualized return spread over 12 months,
-  // adjusted for volatility drag (Ito correction)
-  const annualDrift = Math.log(1 + annualReturnPct / 100) - 0.5 * annualVol * annualVol;
+  // Drift per month: targets geometric mean (CAGR)
+  // Input return is the median compounded growth rate
+  const annualDrift = Math.log(1 + annualReturnPct / 100);
   const baseDrift = annualDrift / 12;
 
   const totalMonths = totalYears * 12;
