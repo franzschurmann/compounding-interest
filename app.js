@@ -89,22 +89,15 @@ function generateInvestmentSchedule(salarySchedule, investmentRatePct) {
   return salarySchedule.map(salary => salary * (investmentRatePct / 100));
 }
 
-// Monte Carlo simulation using log-normal returns (geometric Brownian motion).
+// Monte Carlo simulation using geometric Brownian motion (log-normal returns).
 // The drift term includes the Ito correction (-0.5 * sigma^2) so that the
 // *expected* compounded return matches the user-supplied annual return.
-// Includes mean reversion (AR(1) model) at monthly level to realistically
-// reduce clustering of extreme returns. Negative months bias the next month
-// toward positive returns, and vice versa. This prevents unrealistic
-// multi-year bear/bull markets (e.g., DAX -40% in 2008 followed by +24% in 2009).
-// Mean reversion strength (φ = 0.25) is moderate: after a -10% month, next
-// month's drift increases by ~2.5%, making recovery more likely.
 //
-// IMPORTANT: This simulation implements proper dollar-cost averaging (DCA) by
-// tracking shares, not just balance. Each month:
-// 1. Share price changes based on market returns
+// This simulation implements proper dollar-cost averaging (DCA) by tracking shares:
+// 1. Share price changes based on market returns (pure random walk)
 // 2. New investment buys shares at current price (more shares when price is low)
 // 3. Portfolio value = totalShares × currentSharePrice
-// This ensures the simulation captures the real benefit of buying low.
+// This allows prolonged bear markets where DCA truly shines through share accumulation.
 function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, totalYears, startingBalance) {
   const annualVol = annualVolPct / 100;
   // Monthly volatility: annual volatility scaled by sqrt(1/12)
@@ -114,13 +107,6 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
   const annualDrift = Math.log(1 + annualReturnPct / 100) - 0.5 * annualVol * annualVol;
   const baseDrift = annualDrift / 12;
 
-  // Mean reversion strength (positive value pulls returns back to mean)
-  // φ = 0.45 provides strong mean reversion: after a -10% month, drift
-  // increases by ~4.5%, making recovery more likely the following month
-  // Based on empirical studies (Fama & French 1988, others) showing φ ≈ 0.3-0.5
-  // for weekly-monthly stock returns with clustering effects
-  const meanReversionStrength = 0.45;
-
   const totalMonths = totalYears * 12;
   const entries = [];
 
@@ -128,7 +114,6 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
   let sharePrice = 100;  // Arbitrary starting share price (100 EUR)
   let totalShares = startingBalance / sharePrice;  // Convert starting balance to shares
   let totalInvested = startingBalance;
-  let prevLogReturn = 0;  // Track previous month's return for AR(1) calculation
 
   for (let m = 1; m <= totalMonths; m++) {
     // If schedule provided, use varying amounts; otherwise fixed
@@ -136,22 +121,17 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
       ? monthlyAmountOrSchedule[m - 1]
       : monthlyAmountOrSchedule;
 
-    // AR(1) mean reversion: pull this month's drift toward baseline if last month was extreme
-    // If last month was very negative (negative logReturn), increase drift to encourage recovery
-    // If last month was very positive, decrease drift slightly
-    const drift = baseDrift + (meanReversionStrength * -prevLogReturn);
-
     let growthFactor;
     if (annualVolPct === 0) {
+      // Deterministic growth (no volatility)
       growthFactor = Math.pow(1 + annualReturnPct / 100, 1 / 12);
-      prevLogReturn = Math.log(growthFactor);
     } else {
-      const logReturn = randomNormal(drift, monthlyStdDev);
+      // Stochastic growth (geometric Brownian motion)
+      const logReturn = randomNormal(baseDrift, monthlyStdDev);
       growthFactor = Math.exp(logReturn);
-      prevLogReturn = logReturn;
     }
 
-    // Apply growth to share price (not balance)
+    // Apply growth to share price
     sharePrice = sharePrice * growthFactor;
 
     // Buy shares at current price with monthly investment
