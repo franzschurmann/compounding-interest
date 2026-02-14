@@ -39,6 +39,7 @@ const startingAmountInput = document.getElementById("startingAmount");
 const stats = {
   totalInvested: document.getElementById("totalInvested"),
   simulatedValue: document.getElementById("simulatedValue"),
+  annualizedReturn: document.getElementById("annualizedReturn"),
   totalGains: document.getElementById("totalGains"),
   totalGainsPct: document.getElementById("totalGainsPct"),
 };
@@ -225,6 +226,12 @@ function calculate() {
     totalInvestmentLine.push(currentSimulation[m].totalInvested);
   }
 
+  // Extract share price index for benchmark
+  const sharePriceIndex = [100];  // Starting baseline at 100
+  for (let m = 0; m < currentSimulation.length; m++) {
+    sharePriceIndex.push(currentSimulation[m].sharePrice);
+  }
+
   // Pre-compute tooltip data for monthly granularity
   const simulatedTotalReturnPct = [];
   const simulatedTrailing12mPct = [];
@@ -267,6 +274,15 @@ function calculate() {
     : startingBalance;
   stats.totalInvested.textContent = formatEUR(totalInvested);
   stats.simulatedValue.textContent = formatEUR(finalSimulated);
+
+  // Calculate annualized return (CAGR)
+  let annualizedReturn = 0;
+  if (years > 0 && totalInvested > 0) {
+    const growthMultiple = finalSimulated / totalInvested;
+    annualizedReturn = (Math.pow(growthMultiple, 1 / years) - 1) * 100;
+  }
+  stats.annualizedReturn.textContent = `${annualizedReturn >= 0 ? "+" : ""}${annualizedReturn.toFixed(2)}% p.a.`;
+
   const totalGain = finalSimulated - totalInvested;
   stats.totalGains.textContent = formatEUR(totalGain);
   const gainPct = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
@@ -280,6 +296,7 @@ function calculate() {
     simulated,
     simulatedTotalReturnPct,
     simulatedTrailing12mPct,
+    sharePriceIndex,
   }, startAge);
   updateTable();
 }
@@ -317,6 +334,17 @@ function updateChart(labels, data, startAge) {
       borderDash: [6, 4],
       pointRadius: 0,
       tension: 0,
+    },
+    {
+      label: "Share Price Index",
+      data: data.sharePriceIndex,
+      borderColor: "#ff9800",
+      backgroundColor: "transparent",
+      fill: false,
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.1,
+      yAxisID: 'y2',
     },
   ];
 
@@ -360,6 +388,13 @@ function updateChart(labels, data, startAge) {
             },
             label: (ctx) => {
               const ds = ctx.dataset;
+
+              // Share Price Index (simple format)
+              if (ds.label === "Share Price Index") {
+                return `${ds.label}: ${ctx.parsed.y.toFixed(2)} points`;
+              }
+
+              // Other datasets (EUR values with return metrics)
               const base = `${ds.label}: ${formatEUR(ctx.parsed.y)}`;
               if (!ds.simulatedTotalReturnPct) return base;
               const idx = ctx.dataIndex;
@@ -394,12 +429,24 @@ function updateChart(labels, data, startAge) {
           grid: { color: gridColor },
         },
         y: {
+          position: 'left',
           title: { display: true, text: "Portfolio Value (EUR)", color: mutedColor },
           ticks: {
             color: hintColor,
             callback: (v) => formatEUR(v),
           },
           grid: { color: gridColor },
+        },
+        y2: {
+          position: 'right',
+          title: { display: true, text: "Share Price Index", color: "#ff9800" },
+          ticks: {
+            color: "#ff9800",
+            callback: (v) => v.toFixed(0),
+          },
+          grid: {
+            drawOnChartArea: false,
+          },
         },
       },
     },
