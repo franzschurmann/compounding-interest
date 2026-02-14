@@ -259,10 +259,11 @@ h1 {
   color: var(--negative);
 }
 
-.stat-sublabel {
-  display: block;
+.stat-annualized {
   font-size: 0.85rem;
-  color: var(--hint);
+  font-weight: 500;
+  color: var(--text-muted);
+  display: block;
   margin-top: 0.25rem;
 }
 
