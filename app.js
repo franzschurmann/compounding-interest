@@ -98,6 +98,13 @@ function generateInvestmentSchedule(salarySchedule, investmentRatePct) {
 // multi-year bear/bull markets (e.g., DAX -40% in 2008 followed by +24% in 2009).
 // Mean reversion strength (φ = 0.25) is moderate: after a -10% month, next
 // month's drift increases by ~2.5%, making recovery more likely.
+//
+// IMPORTANT: This simulation implements proper dollar-cost averaging (DCA) by
+// tracking shares, not just balance. Each month:
+// 1. Share price changes based on market returns
+// 2. New investment buys shares at current price (more shares when price is low)
+// 3. Portfolio value = totalShares × currentSharePrice
+// This ensures the simulation captures the real benefit of buying low.
 function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, totalYears, startingBalance) {
   const annualVol = annualVolPct / 100;
   // Monthly volatility: annual volatility scaled by sqrt(1/12)
@@ -116,7 +123,10 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
 
   const totalMonths = totalYears * 12;
   const entries = [];
-  let balance = startingBalance;
+
+  // Share-based tracking for proper DCA modeling
+  let sharePrice = 100;  // Arbitrary starting share price (100 EUR)
+  let totalShares = startingBalance / sharePrice;  // Convert starting balance to shares
   let totalInvested = startingBalance;
   let prevLogReturn = 0;  // Track previous month's return for AR(1) calculation
 
@@ -140,7 +150,17 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
       growthFactor = Math.exp(logReturn);
       prevLogReturn = logReturn;
     }
-    balance = balance * growthFactor + monthlyAmount;
+
+    // Apply growth to share price (not balance)
+    sharePrice = sharePrice * growthFactor;
+
+    // Buy shares at current price with monthly investment
+    const sharesBought = monthlyAmount / sharePrice;
+    totalShares += sharesBought;
+
+    // Calculate balance from total shares and current price
+    const balance = totalShares * sharePrice;
+
     totalInvested += monthlyAmount;
     entries.push({
       month: m,
@@ -148,6 +168,9 @@ function simulateGrowth(monthlyAmountOrSchedule, annualReturnPct, annualVolPct, 
       invested: monthlyAmount,
       totalInvested,
       balance,
+      sharePrice,      // Current share price for verification
+      sharesBought,    // Shares purchased this month
+      totalShares,     // Cumulative shares owned
     });
   }
 
