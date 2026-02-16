@@ -201,10 +201,42 @@ h1 {
   margin-bottom: 2rem;
 }
 
+.chart-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.btn-reset-zoom {
+  background: var(--btn);
+  color: var(--btn-text);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-reset-zoom:hover:not(:disabled) {
+  background: var(--btn-hover);
+}
+
+.btn-reset-zoom:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .chart-container canvas {
   display: block;
   background-color: light-dark(white, black);
   border-radius: 8px;
+  cursor: col-resize;
+}
+
+.chart-container canvas:active {
+  cursor: col-resize;
 }
 
 .summary {

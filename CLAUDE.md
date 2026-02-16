@@ -6,10 +6,10 @@ A simple web-based visualization tool that demonstrates the compounding effect o
 ### Core Features
 - Interactive chart showing projected portfolio growth over time
 - User-adjustable inputs with sensible defaults:
-  - **Monthly investment amount** — default: 200 EUR
+  - **Monthly investment amount** — default: 400 EUR
   - **Expected annual return** — default: ~8% (benchmarked to the DAX historical average)
   - **Volatility (standard deviation)** — default: ~20% (based on DAX historical volatility)
-  - **Investment horizon** — default: 30 years
+  - **Investment horizon** — default: 40 years
 - Show the effect of compounding vs. just saving (no returns) as a comparison line
 - Display key summary stats (total invested, projected value, total gains)
 

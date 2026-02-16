@@ -170,7 +170,7 @@ function calculate() {
   const annualReturn = parseFloat(inputs.annualReturn.value) || 0;
   const vol = parseFloat(inputs.volatility.value) || 0;
   const years = parseInt(inputs.years.value) || 1;
-  const startAge = parseInt(inputs.startingAge.value) || 25;
+  const startAge = isNaN(parseInt(inputs.startingAge.value)) ? 25 : parseInt(inputs.startingAge.value);
   const startingBalance = getStartingBalance();
 
   // Check if salary growth is enabled
@@ -340,6 +340,7 @@ function updateChart(labels, data, startAge) {
     type: "line",
     data: { labels, datasets },
     options: {
+      animation: false,
       responsive: true,
       interaction: { mode: "index", intersect: false },
       plugins: {
@@ -391,11 +392,12 @@ function updateChart(labels, data, startAge) {
           title: { display: true, text: "Age", color: mutedColor },
           ticks: {
             color: hintColor,
-            callback: (value, index) => {
-              // Show only every 12th tick (yearly)
-              if (index % 12 === 0) {
-                const ageOffset = index / 12;
-                return startAge + ageOffset;
+            callback: (value) => {
+              if (value % 12 === 0) {
+                const parsed = parseInt(inputs.startingAge.value);
+                const startAge = isNaN(parsed) ? 25 : parsed;
+                const age = startAge + value / 12;
+                return age;
               }
               return null;
             },
@@ -420,7 +422,7 @@ function updateChart(labels, data, startAge) {
 function updateTable() {
   const tbody = document.querySelector("#portfolioTable tbody");
   const monthly = parseFloat(inputs.monthlyInvestment.value) || 0;
-  const startAge = parseInt(inputs.startingAge.value) || 25;
+  const startAge = isNaN(parseInt(inputs.startingAge.value)) ? 25 : parseInt(inputs.startingAge.value);
   const startingBalance = getStartingBalance();
 
   let rows = [];
@@ -546,6 +548,119 @@ function updateSalaryTable(salarySchedule, investmentSchedule, startAge, milesto
 Object.values(inputs).forEach((el) => el.addEventListener("input", calculate));
 
 document.getElementById("rerollBtn").addEventListener("click", calculate);
+
+const resetZoomBtn = document.getElementById("resetZoom");
+resetZoomBtn.disabled = true;
+
+resetZoomBtn.addEventListener("click", () => {
+  if (chart) {
+    chart.options.scales.x.min = undefined;
+    chart.options.scales.x.max = undefined;
+    chart.update();
+    resetZoomBtn.disabled = true;
+  }
+});
+
+// ── Zoom functionality ──
+
+const chartCanvas = document.getElementById("chart");
+let isZooming = false;
+let zoomStartX = 0;
+let zoomStartDataValue = 0;
+
+function getDataValueFromPixel(pixelX) {
+  if (!chart || !chart.scales || !chart.scales.x) return null;
+  const xScale = chart.scales.x;
+
+  // getValueForPixel expects canvas pixel coordinates directly
+  return xScale.getValueForPixel(pixelX);
+}
+
+function drawZoomPreview(startX, endX) {
+  if (!chart || !chart.chartArea) return;
+
+  // Redraw the chart without animation
+  chart.update('none');
+
+  // Get canvas context
+  const ctx = chartCanvas.getContext("2d");
+  const chartArea = chart.chartArea;
+  const canvasTop = chartArea.top;
+  const canvasBottom = chartArea.bottom;
+
+  // Clamp positions to chart area
+  const left = Math.max(Math.min(startX, endX), chartArea.left);
+  const right = Math.min(Math.max(startX, endX), chartArea.right);
+  const width = right - left;
+
+  // Draw semi-transparent overlay
+  ctx.fillStyle = "rgba(88, 166, 255, 0.15)";
+  ctx.fillRect(left, canvasTop, width, canvasBottom - canvasTop);
+
+  // Draw border
+  ctx.strokeStyle = "rgba(88, 166, 255, 0.8)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(left, canvasTop, width, canvasBottom - canvasTop);
+}
+
+chartCanvas.addEventListener("mousedown", (e) => {
+  if (!chart) return;
+  isZooming = true;
+  const rect = chartCanvas.getBoundingClientRect();
+  zoomStartX = e.clientX - rect.left;
+  zoomStartDataValue = getDataValueFromPixel(zoomStartX);
+});
+
+chartCanvas.addEventListener("mousemove", (e) => {
+  if (!isZooming || !chart) return;
+
+  const rect = chartCanvas.getBoundingClientRect();
+  const currentX = e.clientX - rect.left;
+
+  // Visual feedback: change cursor when dragging
+  if (Math.abs(currentX - zoomStartX) > 5) {
+    chartCanvas.style.cursor = "col-resize";
+    // Draw the preview rectangle
+    drawZoomPreview(zoomStartX, currentX);
+  }
+});
+
+chartCanvas.addEventListener("mouseup", (e) => {
+  if (!isZooming || !chart) {
+    isZooming = false;
+    chartCanvas.style.cursor = "col-resize";
+    chart.update();
+    return;
+  }
+
+  isZooming = false;
+  chartCanvas.style.cursor = "col-resize";
+
+  const rect = chartCanvas.getBoundingClientRect();
+  const currentX = e.clientX - rect.left;
+  const zoomEndDataValue = getDataValueFromPixel(currentX);
+
+  // Only zoom if drag distance is significant
+  if (Math.abs(currentX - zoomStartX) > 10 && zoomEndDataValue !== null && zoomStartDataValue !== null) {
+    const minValue = Math.min(zoomStartDataValue, zoomEndDataValue);
+    const maxValue = Math.max(zoomStartDataValue, zoomEndDataValue);
+
+    // Apply zoom by setting scale min/max
+    chart.options.scales.x.min = minValue;
+    chart.options.scales.x.max = maxValue;
+    resetZoomBtn.disabled = false;
+  }
+
+  chart.update();
+});
+
+chartCanvas.addEventListener("mouseleave", () => {
+  if (isZooming) {
+    isZooming = false;
+    chartCanvas.style.cursor = "col-resize";
+    chart.update();
+  }
+});
 
 startingInvestmentToggle.addEventListener("change", () => {
   startingAmountWrapper.classList.toggle("visible", startingInvestmentToggle.checked);
