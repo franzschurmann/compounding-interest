@@ -165,6 +165,44 @@ function getStartingBalance() {
   return 0;
 }
 
+function updateSummaryStats(monthIndex) {
+  const startingBalance = getStartingBalance();
+
+  if (monthIndex < 0 || currentSimulation.length === 0) {
+    stats.totalInvested.textContent = formatEUR(startingBalance);
+    stats.simulatedValue.textContent = formatEUR(startingBalance);
+    stats.totalGains.textContent = formatEUR(0);
+    stats.totalGainsPct.textContent = "+0.0%";
+    stats.totalGains.className = "stat-value gain";
+    stats.totalGainsPct.className = "stat-pct gain";
+    stats.annualizedReturn.textContent = "+0.00% p.a.";
+    return;
+  }
+
+  const idx = Math.min(monthIndex, currentSimulation.length - 1);
+  const entry = currentSimulation[idx];
+
+  const totalInvested = entry.totalInvested;
+  const finalSimulated = entry.balance;
+  stats.totalInvested.textContent = formatEUR(totalInvested);
+  stats.simulatedValue.textContent = formatEUR(finalSimulated);
+
+  const totalGain = finalSimulated - totalInvested;
+  stats.totalGains.textContent = formatEUR(totalGain);
+  const gainPct = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
+  stats.totalGainsPct.textContent = `${gainPct >= 0 ? "+" : ""}${gainPct.toFixed(1)}%`;
+  const colorClass = totalGain >= 0 ? "gain" : "loss";
+  stats.totalGains.className = `stat-value ${colorClass}`;
+  stats.totalGainsPct.className = `stat-pct ${colorClass}`;
+
+  const yearsElapsed = (idx + 1) / 12;
+  const totalReturnDecimal = totalInvested > 0 ? (finalSimulated / totalInvested - 1) : 0;
+  const annualizedReturn = yearsElapsed > 0
+    ? (Math.pow(1 + totalReturnDecimal, 1 / yearsElapsed) - 1) * 100
+    : 0;
+  stats.annualizedReturn.textContent = `${annualizedReturn >= 0 ? "+" : ""}${annualizedReturn.toFixed(2)}% p.a.`;
+}
+
 function calculate() {
   const monthly = parseFloat(inputs.monthlyInvestment.value) || 0;
   const annualReturn = parseFloat(inputs.annualReturn.value) || 0;
@@ -259,30 +297,7 @@ function calculate() {
     }
   }
 
-  // Update summary stats from simulation
-  const totalInvested = currentSimulation.length > 0
-    ? currentSimulation[currentSimulation.length - 1].totalInvested
-    : startingBalance;
-  const finalSimulated = currentSimulation.length > 0
-    ? currentSimulation[currentSimulation.length - 1].balance
-    : startingBalance;
-  stats.totalInvested.textContent = formatEUR(totalInvested);
-  stats.simulatedValue.textContent = formatEUR(finalSimulated);
-  const totalGain = finalSimulated - totalInvested;
-  stats.totalGains.textContent = formatEUR(totalGain);
-  const gainPct = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
-  stats.totalGainsPct.textContent = `${gainPct >= 0 ? "+" : ""}${gainPct.toFixed(1)}%`;
-  const colorClass = totalGain >= 0 ? "gain" : "loss";
-  stats.totalGains.className = `stat-value ${colorClass}`;
-  stats.totalGainsPct.className = `stat-pct ${colorClass}`;
-
-  // Calculate annualized return (CAGR)
-  const investmentYears = parseInt(inputs.years.value) || 1;
-  const totalReturnDecimal = totalInvested > 0 ? (finalSimulated / totalInvested - 1) : 0;
-  const annualizedReturn = investmentYears > 0
-    ? (Math.pow(1 + totalReturnDecimal, 1 / investmentYears) - 1) * 100
-    : 0;
-  stats.annualizedReturn.textContent = `${annualizedReturn >= 0 ? "+" : ""}${annualizedReturn.toFixed(2)}% p.a.`;
+  updateSummaryStats(currentSimulation.length - 1);
 
   updateChart(monthlyLabels, {
     totalInvestmentLine,
@@ -558,6 +573,7 @@ resetZoomBtn.addEventListener("click", () => {
     chart.options.scales.x.max = undefined;
     chart.update();
     resetZoomBtn.disabled = true;
+    updateSummaryStats(currentSimulation.length - 1);
   }
 });
 
@@ -649,9 +665,11 @@ chartCanvas.addEventListener("mouseup", (e) => {
     chart.options.scales.x.min = minValue;
     chart.options.scales.x.max = maxValue;
     resetZoomBtn.disabled = false;
+    chart.update();
+    updateSummaryStats(Math.round(maxValue) - 1);
+  } else {
+    chart.update();
   }
-
-  chart.update();
 });
 
 chartCanvas.addEventListener("mouseleave", () => {
