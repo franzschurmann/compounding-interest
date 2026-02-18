@@ -45,7 +45,10 @@ const stats = {
 };
 
 let currentSimulation = [];
+let currentSimulationChartData = []; // balance values for chart (includes startingBalance at index 0)
+let simulationHistory = []; // up to 9 past simulation traces
 let currentTableView = "yearly";
+let hasSimulated = false; // true once user clicks "Simulate"
 
 function formatEUR(value) {
   return new Intl.NumberFormat("de-DE", {
@@ -203,7 +206,19 @@ function updateSummaryStats(monthIndex) {
   stats.annualizedReturn.textContent = `${annualizedReturn >= 0 ? "+" : ""}${annualizedReturn.toFixed(2)}% p.a.`;
 }
 
-function calculate() {
+function calculate({ isRefresh = false } = {}) {
+  if (isRefresh) {
+    hasSimulated = true;
+    if (currentSimulationChartData.length > 0) {
+      // Save current trace before overwriting
+      simulationHistory.push(currentSimulationChartData);
+      if (simulationHistory.length > 20) simulationHistory.shift();
+    }
+  } else {
+    // Input changed — old traces are no longer comparable
+    hasSimulated = false;
+    simulationHistory = [];
+  }
   const monthly = parseFloat(inputs.monthlyInvestment.value) || 0;
   const annualReturn = parseFloat(inputs.annualReturn.value) || 0;
   const vol = parseFloat(inputs.volatility.value) || 0;
@@ -243,6 +258,9 @@ function calculate() {
     document.getElementById("salaryTableSection").style.display = "none";
   }
 
+  // Deterministic benchmark (0% volatility — pure compound growth)
+  const benchmarkSimulation = simulateGrowth(investmentSchedule, annualReturn, 0, years, startingBalance);
+
   // Randomized simulation (monthly granularity)
   currentSimulation = simulateGrowth(investmentSchedule, annualReturn, vol, years, startingBalance);
 
@@ -256,6 +274,13 @@ function calculate() {
   const simulated = [startingBalance];
   for (let m = 0; m < currentSimulation.length; m++) {
     simulated.push(currentSimulation[m].balance);
+  }
+  currentSimulationChartData = hasSimulated ? simulated : [];
+
+  // Extract benchmark data points
+  const benchmark = [startingBalance];
+  for (let m = 0; m < benchmarkSimulation.length; m++) {
+    benchmark.push(benchmarkSimulation[m].balance);
   }
 
   // Create monthly total investment line
@@ -297,15 +322,24 @@ function calculate() {
     }
   }
 
-  updateSummaryStats(currentSimulation.length - 1);
+  // Show/hide simulation-dependent UI
+  const tableSection = document.querySelector(".table-section");
+  const summaryStats = document.querySelector(".summary-stats");
+  tableSection.style.display = hasSimulated ? "" : "none";
+  if (summaryStats) summaryStats.style.display = hasSimulated ? "" : "none";
+
+  if (hasSimulated) {
+    updateSummaryStats(currentSimulation.length - 1);
+    updateTable();
+  }
 
   updateChart(monthlyLabels, {
     totalInvestmentLine,
-    simulated,
+    simulated: hasSimulated ? simulated : null,
+    benchmark,
     simulatedTotalReturnPct,
     simulatedTrailing12mPct,
   }, startAge);
-  updateTable();
 }
 
 // ── Chart ──
@@ -318,7 +352,29 @@ function updateChart(labels, data, startAge) {
   const mutedColor = "#8b949e";
   const gridColor = "rgba(48,54,61,0.5)";
 
-  const datasets = [
+  // Build historical trace datasets with exponential opacity decay.
+  // Most recent past trace = 60% of current line's opacity, each older trace
+  // is 60% of the one after it, with a minimum floor so nothing fully disappears.
+  const decayFactor = 0.6;
+  const minOpacity = 0.05;
+  const historyDatasets = simulationHistory.map((traceData, i) => {
+    const distanceFromCurrent = simulationHistory.length - i; // oldest = largest
+    const alpha = Math.max(minOpacity, Math.pow(decayFactor, distanceFromCurrent));
+    return {
+      label: `Past run ${i + 1}`,
+      data: traceData,
+      borderColor: `rgba(88, 166, 255, ${alpha.toFixed(3)})`,
+      backgroundColor: "transparent",
+      fill: false,
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0.1,
+      isHistoryTrace: true,
+    };
+  });
+
+  const simulationDatasets = data.simulated ? [
+    ...historyDatasets,
     {
       label: "Simulated Value",
       data: data.simulated,
@@ -330,6 +386,21 @@ function updateChart(labels, data, startAge) {
       tension: 0.1,
       simulatedTotalReturnPct: data.simulatedTotalReturnPct,
       simulatedTrailing12mPct: data.simulatedTrailing12mPct,
+    },
+  ] : [];
+
+  const datasets = [
+    ...simulationDatasets,
+    {
+      label: "Benchmark",
+      data: data.benchmark,
+      borderColor: "#e89b3e",
+      backgroundColor: "transparent",
+      fill: false,
+      borderWidth: 2,
+      borderDash: [4, 3],
+      pointRadius: 0,
+      tension: 0.1,
     },
     {
       label: "Total Invested",
@@ -365,6 +436,7 @@ function updateChart(labels, data, startAge) {
             usePointStyle: false,
             padding: 16,
             font: { size: 13, weight: "500" },
+            filter: (item, data) => !data.datasets[item.datasetIndex].isHistoryTrace,
           },
         },
         tooltip: {
@@ -373,6 +445,7 @@ function updateChart(labels, data, startAge) {
           borderWidth: 1,
           titleColor: "#e1e4e8",
           bodyColor: "#e1e4e8",
+          filter: (item) => !item.dataset.isHistoryTrace,
           callbacks: {
             title: (context) => {
               // Format month index as "X y Y m" (years and months)
@@ -562,7 +635,7 @@ function updateSalaryTable(salarySchedule, investmentSchedule, startAge, milesto
 
 Object.values(inputs).forEach((el) => el.addEventListener("input", calculate));
 
-document.getElementById("rerollBtn").addEventListener("click", calculate);
+document.getElementById("rerollBtn").addEventListener("click", () => calculate({ isRefresh: true }));
 
 const resetZoomBtn = document.getElementById("resetZoom");
 resetZoomBtn.disabled = true;
