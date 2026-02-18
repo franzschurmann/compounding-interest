@@ -324,9 +324,9 @@ function calculate({ isRefresh = false } = {}) {
 
   // Show/hide simulation-dependent UI
   const tableSection = document.querySelector(".table-section");
-  const summaryStats = document.querySelector(".summary-stats");
+  const summaryStats = document.querySelector(".summary");
   tableSection.style.display = hasSimulated ? "" : "none";
-  if (summaryStats) summaryStats.style.display = hasSimulated ? "" : "none";
+  summaryStats.style.display = hasSimulated ? "" : "none";
 
   if (hasSimulated) {
     updateSummaryStats(currentSimulation.length - 1);
