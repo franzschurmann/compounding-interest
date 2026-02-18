@@ -212,7 +212,7 @@ function calculate({ isRefresh = false } = {}) {
     if (currentSimulationChartData.length > 0) {
       // Save current trace before overwriting
       simulationHistory.push(currentSimulationChartData);
-      if (simulationHistory.length > 20) simulationHistory.shift();
+      if (simulationHistory.length > 10) simulationHistory.shift();
     }
   } else {
     // Input changed — old traces are no longer comparable
@@ -353,13 +353,11 @@ function updateChart(labels, data, startAge) {
   const gridColor = "rgba(48,54,61,0.5)";
 
   // Build historical trace datasets with exponential opacity decay.
-  // Most recent past trace = 60% of current line's opacity, each older trace
-  // is 60% of the one after it, with a minimum floor so nothing fully disappears.
-  const decayFactor = 0.6;
-  const minOpacity = 0.05;
+  // Most recent past trace = 80% opacity, each older trace is 80% of the previous.
+  const decayFactor = 0.8;
   const historyDatasets = simulationHistory.map((traceData, i) => {
     const distanceFromCurrent = simulationHistory.length - i; // oldest = largest
-    const alpha = Math.max(minOpacity, Math.pow(decayFactor, distanceFromCurrent));
+    const alpha = Math.pow(decayFactor, distanceFromCurrent);
     return {
       label: `Past run ${i + 1}`,
       data: traceData,
